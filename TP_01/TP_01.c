@@ -1,4 +1,5 @@
 //-GIANFRANCO CHIARIZIA SPD-//
+///CORREGIDO, FUNCIONA BOTON RESET 
 //--- Defines ---//
 
 //  =========
@@ -48,13 +49,38 @@ void loop()
 {   
   	sequence();
     boton_start();        
-    boton_reset();     
+    boton_reset(BUTTON_RESET);     
     delay(80);      
 }
 
 
 
 // Funciones //
+
+/**
+* @brief Secuencia, llama otra funciones dentro de ella
+*/
+void sequence()
+{
+    unsigned long millis_now = millis();  
+  	if(millis_now >=(millis_before + BASE_MILLI_SECONDS) && flag == 1 ) 
+    {
+        if(contador <= MAX_SECONDS) 
+        {           
+            decimalAbinario(contador, arrayEnteros);            
+            turnLeds(arrayEnteros, leds, LEN);
+            
+         	
+          	Serial.print ("Segundos: ");
+          	Serial.print(contador);             
+            Serial.print(" | ");         
+            imprimirArray(arrayEnteros, LEN); 
+            contador++;          	
+        }
+      	millis_before = millis_now;   
+    }
+}
+
 
 
 /**
@@ -111,10 +137,10 @@ void boton_start()
 /**
 * @brief funcion para resetear el cronometro, reinicia el contador
 */    
-void  boton_reset()
+void  boton_reset(int pinReset)
 {
     
-    int button_reset_now = digitalRead(BUTTON_RESET);
+    int button_reset_now = digitalRead(pinReset);
   	if(button_reset_now == HIGH && button_before_reset==LOW)
     {       
       
@@ -195,38 +221,14 @@ void turnLeds(int arrayEnteros[], int leds[], int len)
 * @brief Imprime array de binarios 
 */
 
-void imprimirArray()
+void imprimirArray(int arrayEnteros[], int len)
 {
   	Serial.print("Binario: [");
   
-  	for (int i=0; i<LEN; i++)
+  	for (int i=0; i<len; i++)
   	{
     	Serial.print(arrayEnteros[i]);
   	}
   	Serial.println("]");
-}
-
-/**
-* @brief Secuencia, llama otra funciones dentro de ella
-*/
-void sequence()
-{
-    unsigned long millis_now = millis();  
-  	if(millis_now >=(millis_before + BASE_MILLI_SECONDS) && flag == 1 ) 
-    {
-        if(contador <= MAX_SECONDS) 
-        {           
-            decimalAbinario(contador, arrayEnteros);            
-            turnLeds(arrayEnteros, leds, LEN);
-            
-         	
-          	Serial.print ("Segundos: ");
-          	Serial.print(contador);             
-            Serial.print(" | ");         
-            imprimirArray(); 
-            contador++;          	
-        }
-      	millis_before = millis_now;   
-    }
 }
 

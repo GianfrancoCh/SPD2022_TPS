@@ -1,16 +1,19 @@
-//-GIANFRANCO CHIARIZIA SPD TP02 CERRADURA SPD-//
 #include <LiquidCrystal.h>
+//LIBRERIA PARA USO DE TECLADO
 #include <Keypad.h>
 
-
-
-////      DEFINES
-
-
+/*
+================================================================================================
+> DEFINES
+================================================================================================
+*/
+// LARGO CADENADA CARACTERES PASSWORD
 #define LARGO_PASSWORD 7
+// BOTONTES
 #define BOTON_CONFIGURACION A4
 #define BOTON_RESET 12
 #define BOTON_TEST_PASSWORD 11
+// LED Y LCD
 #define LED_OK 9
 #define LED_FAIL 10
 #define TIEMPO_LIMITE_PARPADEO 5000
@@ -26,11 +29,15 @@
 char contraseniaPorDefecto[LARGO_PASSWORD] = "2C2022";	// [ contraseña con la que se inicia la cerradura ]
 char contrasenia[LARGO_PASSWORD];						// [ contraseña ingresada para comprobar ]
 char caracterIngresado;									// [ caracter ingresado que compone la contraseña ]
-int indice = 0;											// [ indice de la cadena de password 
+int indice = 0;											// [ indice de la cadena de password ]
 
-///     KEYPAD
+//	-------------------------------
+//	----[CONFIGURACION TECLADO]----
+//	-------------------------------
+//	>> DIMESIONES DEL TECLADO
 const byte FILAS = 4;					// [ numero de filas ]
 const byte COLUMNAS = 4;				// [ numero de columnas ]
+//	>> MATRIZ QUE INTERPRETA EL TECLADO
 char teclas [FILAS][COLUMNAS] =			// [ configuracion del teclado con sus caracteres ]
 {
     {'1','2','3','A'},
@@ -38,19 +45,22 @@ char teclas [FILAS][COLUMNAS] =			// [ configuracion del teclado con sus caracte
     {'7','8','9','C'},
     {'*','0','#','D'},
 };
-
-byte pinFilas[FILAS] = {7,6,5,4};		// [ pines filas ]
-byte pinColumnas[COLUMNAS] = {3,2,1,0}; // [ pines columnas ]
-
+//	>> PINES TECLADO
+byte pinFilas[FILAS] = {7,6,5,4};		// [ pines contectados para las filas ]
+byte pinColumnas[COLUMNAS] = {3,2,1,0}; // [ pines contectados para las columnas ]
+//	>> TECLADO
 Keypad teclado(makeKeymap(teclas), pinFilas, pinColumnas,FILAS, COLUMNAS); // [ mapeo de teclado ]
 
+//	------------------------------------
+//	----[CONFIGURACION PANTALLA LCD]----
+//	------------------------------------
+//	>> PANTALLA LCD
+LiquidCrystal pantallaLCD(8, 13, A0, A1, A2, A3); // [ pines de pantalla LCD ]
 
-// LCD
-
-LiquidCrystal pantallaLCD(8, 13, A0, A1, A2, A3); // [ pines LCD ]
-
-
-//	>> BOTON CONFIGURATION
+//	-------------------------------
+//	----[CONFIGURACION BOTONES]----
+//	-------------------------------
+//	>> BOTON CONFIGURACION
 int valorBotonConfiguracionAntes = 0;
 //	>> BOTON RESET
 int valorBotonResetAntes = 0;
@@ -84,12 +94,12 @@ int pinLed;
 */
 void setup()
 {
-  
+  //Inicio Botones
   pinMode(BOTON_CONFIGURACION, INPUT);
   pinMode(BOTON_RESET,INPUT);
   pinMode(BOTON_TEST_PASSWORD,INPUT);
   
-  
+  //Inicio Leds
   pinMode(LED_OK,OUTPUT);
   pinMode(LED_FAIL,OUTPUT);
   
@@ -99,15 +109,33 @@ void setup()
   mostrar_mensaje();
 }
 
-
-
-/// LOOP
-
+/*
+================================================================================================
+> LOOP
+================================================================================================
+*/
 void loop()
 {
   sequence();			// [ secuenciador para parpadeo y borrado de pantalla ]
   
+  if(password_Correcto == 0)	// [ Si todavia no se hizo nada (estado inicial del programa) ]
+  {
+    password_pedido(contrasenia,contraseniaPorDefecto);	//[ Deja ingresar la password ]
+  }
   
+  boton_reset();			//[BOTON RESET PANTALLA]
+  
+  if(indice != 0)			// [ Condicion para que haya algun caracter al cual comparar con la contraseña o borrar ]
+  {
+    boton_testPassword();	//[BOTON PARA COMPROBAR CONTRASEÑA]
+  }
+  
+  if(password_Correcto == 1)	// [ Si todavia no se comprobo el password correcto no puedo usar el boton configuracion ]
+  {
+    boton_configuracion();		//[BOTON CONFIGURACION PASSWORD]
+  }
+
+  secuencia_parpadeo_led();
    
   delay(10); 
 }
@@ -125,12 +153,244 @@ void loop()
 ================================================================================================
 */
 
+/*
+-------------------------------
+----[FUNCIONES DE PASSWORD]----
+-------------------------------
+*/
 
+// INGRESO DE PASSWORD
+/// @brief Permite ingresar caracteres, mostrarlos por pantalla y modificar el estado del password
+///	Si el indice llega a 6 se comprueba automaticamente el password
+void password_pedido(char* contrasenia, char* contraseniaPorDefecto)
+{  
+  password_ingresoCaracteres();	// [ funcion de ingreso teclas ]
 
+  if(indice == LARGO_PASSWORD - 1 && banderaBotonConfiguracion == 0)	// [ si el indice llega al limite de caracteres y no estamos usando el boton configuracion]	
+  {	
+    password_comprobar(contrasenia,contraseniaPorDefecto);	// [ Llamo a la funcion comprobar_Password ]
+    indice = 0;												// [ ponemos el indice en 0 para proximo ingreso ]						
+  }
+}
+//-----------------------------------------------
 
+//-----------------------------------------------
+//COMPROBACION PASSWORD
+/// @brief Verifica el password ingresado de manera manual (apretando boton test) o automatica (indice == 6)
+void password_comprobar(char* contrasenia, char* contraseniaPorDefecto)
+{
+  if(strcmp(contrasenia, contraseniaPorDefecto) == 0)	// [ si la comparacion de la cadena es igual la password es correcta ]	
+  {
+    password_Correcto = 1;		// [ se actualiza el primer ingreso para usar boton configuracion ]
+    estado_mensaje = 2; 
+  }
+  else							// [ sino, es incorrecta ]
+  {
+    password_Correcto = -1;		// [ no se deja usar el teclado mientras muestre el mensaje ]
+    estado_mensaje = 3; 		
+  }
+  
+  bandera_inicioParpadeo = 1;
+  mostrar_mensaje();
+  reiniciar_password(); 
+}
+//-----------------------------------------------
 
+//-----------------------------------------------
+//INGRESO DE CONTRASEÑA NUEVA
+/// @brief Permite ingresar una password nueva
+void password_nuevo(char* contrasenia, char* contraseniaPorDefecto)
+{
+  estado_mensaje = 1;
 
+  mostrar_mensaje();			
+  
+  while(indice < LARGO_PASSWORD - 1)
+  {
+    caracterIngresado = teclado.getKey(); 				
+  																						
+  	if(caracterIngresado)								
+  	{													
+      contraseniaPorDefecto[indice] = caracterIngresado;		
+      pantallaLCD.print(caracterIngresado);				
+      indice++;											
+  	}
+    
+    banderaBotonConfiguracion = 1;
+    boton_reset();
+  }
 
+  if(indice == 6)
+  {
+    estado_mensaje = 4;
+    mostrar_mensaje(); 
+  	password_Correcto = 1;
+    bandera_inicioParpadeo = 1;
+  }
+  
+  banderaBotonConfiguracion = 0;
+  indice = 0;
+}
+//-----------------------------------------------
+
+//-----------------------------------------------
+//IINGRESO CARACTER
+/// @brief Muestra por pantalla los caracteres ingresados y guarda el password para compararlo
+void password_ingresoCaracteres(void)
+{
+  caracterIngresado = teclado.getKey();	// [ obtiene el caracter apretado del teclado ]			
+  
+  if(caracterIngresado)	// [ si ingreso un caracter ]					
+  {
+    contrasenia[indice] = caracterIngresado;	// [ guardo ese caracter en la contrasenia ]
+    pantallaLCD.print(caracterIngresado);		// [ muestro ese caracter ingresado en el LCD ]
+    indice++;									// [ incremento el indice de la cadena por cada caracter apretado]
+  }
+}
+//-----------------------------------------------
+
+//-----------------------------------------------
+//INGRESO DE CONTRASEÑA NUEVA
+/// @brief Reinicia la contraseña
+void reiniciar_password(void)
+{
+  strcpy(contrasenia, "xxxxxx");  // [ copia en cada posicion de la cadena una x ]
+}
+//-----------------------------------------------
+
+/*
+-------------------------------
+----[FUNCIONES DE BOTONES]----
+-------------------------------
+*/
+
+//-----------------------------------------------
+//BOTON TEST PASSWORD
+/// @brief Permite testear el password sin llegar a los 6 caracteres ingresados
+void boton_testPassword()
+{
+  int valorBotonTestPasswordAhora;
+  
+  valorBotonTestPasswordAhora = digitalRead(BOTON_TEST_PASSWORD);
+  
+  if(valorBotonTestPasswordAhora == 1 && valorBotonTestPasswordAntes == 0)
+  {
+    password_comprobar(contrasenia, contraseniaPorDefecto);	//	[ Llama a la funcion de comprobar ]
+  }
+  
+  valorBotonTestPasswordAntes = valorBotonTestPasswordAhora;
+}
+//-----------------------------------------------
+
+//-----------------------------------------------
+//BOTON CONFIGURACION
+/// @brief Permite ingresar al estado cambiar password
+void boton_configuracion()
+{
+  int valorBotonConfiguracionAhora;
+  
+  valorBotonConfiguracionAhora = digitalRead(BOTON_CONFIGURACION);
+  
+  if(valorBotonConfiguracionAhora == 1 && valorBotonConfiguracionAntes == 0)
+  {
+    apagar_led();
+    password_nuevo(contrasenia,contraseniaPorDefecto); // [ Llama a la funcion de nuevo password ]
+  }
+  
+  valorBotonConfiguracionAntes = valorBotonConfiguracionAhora;
+}
+//-----------------------------------------------
+
+//-----------------------------------------------
+//BOTON RESET
+/// @brief Permite borrar los caracteres ingresados
+void boton_reset(void)
+{
+  int valorBotonResetAhora;
+  
+  valorBotonResetAhora = digitalRead(BOTON_RESET);
+  
+  if(valorBotonResetAhora == 1 && valorBotonResetAntes == 0)
+  {
+    //mostrarMensaje();		// [ Llama a la funcion que muestra el mensaje correcpondiente ]
+    bandera_inicioParpadeo = 0;
+    bandera_apagarLed = 0;
+    estado_mensaje = 0;
+    if(banderaBotonConfiguracion == 1)
+    {
+     	estado_mensaje = 1;
+    }
+    mostrar_mensaje();
+    tiempoInicioParpadeo = 0;
+    indice = 0;				// [ el indice de la password vuelve a 0 ]
+    password_Correcto = 0;	// [ el estado vuelve a 0 ]
+    reiniciar_password();
+  }
+ 
+  valorBotonResetAntes = valorBotonResetAhora;
+}
+//-----------------------------------------------
+
+/*
+-------------------------------
+------[FUNCIONES DE LEDS]------
+-------------------------------
+*/
+
+//-----------------------------------------------
+//FUNCION SECUENCIA PARPADEO
+/// @brief genera el parpadeo del led y el display cada X tiempo
+void secuencia_parpadeo_led(void)
+{
+  tiempo = millis();
+  
+  switch(password_Correcto)  // [ Comprueba el estado de la contraseña para prender el led ]
+  {
+    case 1:
+    pinLed = LED_OK;
+    break;
+    case -1:
+    pinLed = LED_FAIL;
+    break;
+  }
+
+  if(tiempo >= (tiempoAnterior + parpadeoLed) && bandera_apagarLed == 1)  // [ Compara el tiempo del parpadeo del led y el display ]
+  {
+    digitalWrite(pinLed,estadoLed);
+  	estadoLed = !estadoLed;
+  	tiempoAnterior = tiempo;
+    
+    if(estadoLed)   // [ Verifica el estado del led, para prender y apagar el display ]
+  	{
+      pantallaLCD.noDisplay();
+    }
+    else
+    {
+      pantallaLCD.display();
+    }
+  } 
+   
+  if(bandera_apagarLed == 0) 
+  {
+    apagar_led();
+  }
+}
+//-----------------------------------------------
+
+//-----------------------------------------------
+//FUNCION APAGAR LEDS
+/// @brief genera el parpadeo del led y el display cada X tiempo
+void apagar_led(void)
+{
+    digitalWrite(pinLed,LOW);
+    pantallaLCD.display();
+}
+
+/*
+-------------------------------
+------[FUNCIONES MILLIS]-------
+-------------------------------
+*/
 
 //-----------------------------------------------
 /// @brief captura el tiempo inicial del parpadeo, y lo detiene cuando pasen los 5 segundos
@@ -164,7 +424,6 @@ void sequence(void)
 /// PRINT MENSAJES
 
 /// @brief muestra los mensajes en el display segun el estado de la contraseña
-
 void mostrar_mensaje (void)
 {
   pantallaLCD.clear();
